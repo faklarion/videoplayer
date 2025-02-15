@@ -1,31 +1,13 @@
 {
-    "Senin": [
-        {
-            "video": "C:/Users/USER/Downloads/Video/Video SPI.mp4",
-            "time": "16:45"
-        }
-    ],
+    "Senin": [],
     "Selasa": [],
     "Rabu": [],
-    "Kamis": [
-        {
-            "video": "C:/Users/USER/Downloads/Video/Video SPI.mp4",
-            "time": "14:20"
-        },
-        {
-            "video": "C:/Users/USER/Downloads/Video/Video SPI.mp4",
-            "time": "14:22"
-        },
-        {
-            "video": "C:/Users/USER/Downloads/Video/Video SPI.mp4",
-            "time": "14:26"
-        }
-    ],
+    "Kamis": [],
     "Jumat": [],
     "Sabtu": [
         {
             "video": "C:/Users/USER/Downloads/Video/Video SPI.mp4",
-            "time": "13:54"
+            "time": "15:13"
         }
     ],
     "Minggu": []
