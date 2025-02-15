@@ -44,17 +44,22 @@ def update_schedule_table():
 def update_range_table():
     tree_range.delete(*tree_range.get_children())  # Hapus semua data di tabel
     for item in range_data:
-        tree_range.insert("", "end", values=(item["video"], item["interval"]))  # Tambahkan data ke tabel
+        tree_range.insert("", "end", values=(item["video"], item["interval"]))
 
-# Fungsi untuk memutar video
-def play_video(video_path):
+# Fungsi untuk memutar video di layar tertentu
+def play_video(video_path, screen_offset_x=0):
     if not video_path:
         label_status.config(text="Tidak ada video yang dipilih.")
         return
     
     media = instance.media_new(video_path)
     player.set_media(media)
-    player.set_fullscreen(True)  # Setel video ke mode fullscreen
+    player.set_fullscreen(True)  # Setel fullscreen
+    
+    # Atur posisi window ke layar kedua
+    if screen_offset_x > 0:
+        player.set_xwindow(screen_offset_x)  # Pindahkan ke layar kedua
+    
     player.play()
 
     while True:
@@ -67,7 +72,7 @@ def play_video(video_path):
     label_status.config(text="Video selesai diputar!")
 
 # Fungsi untuk memutar video dalam rentang waktu tertentu dengan interval
-def play_video_with_interval(video_path, interval_minutes):
+def play_video_with_interval(video_path, interval_minutes, screen_offset_x=0):
     if not video_path:
         label_status.config(text="Tidak ada video yang dipilih.")
         return
@@ -75,7 +80,12 @@ def play_video_with_interval(video_path, interval_minutes):
     while True:  # Loop tanpa batas waktu (tanpa durasi)
         media = instance.media_new(video_path)
         player.set_media(media)
-        player.set_fullscreen(True)  # Setel video ke mode fullscreen
+        player.set_fullscreen(True)  # Setel fullscreen
+        
+        # Atur posisi window ke layar kedua
+        if screen_offset_x > 0:
+            player.set_xwindow(screen_offset_x)  # Pindahkan ke layar kedua
+        
         player.play()
 
         # Tunggu sampai video selesai diputar
@@ -87,23 +97,6 @@ def play_video_with_interval(video_path, interval_minutes):
         # Tunggu interval sebelum memutar lagi
         time.sleep(interval_minutes * 60)
 
-def delete_interval():
-    selected_item = tree_range.selection()  # Ambil item yang dipilih di tabel
-    if not selected_item:
-        messagebox.showerror("Error", "Pilih jadwal interval yang ingin dihapus!")
-        return
-
-    for item in selected_item:
-        values = tree_range.item(item, "values")  # Ambil nilai dari item yang dipilih
-        video_path = values[0]  # Ambil path video dari nilai
-        interval = int(values[1])  # Ambil interval dari nilai
-
-        # Hapus entri dari range_data
-        range_data[:] = [data for data in range_data if not (data["video"] == video_path and data["interval"] == interval)]
-
-    update_range_table()  # Perbarui tabel
-    messagebox.showinfo("Sukses", "Jadwal interval berhasil dihapus!")
-
 # Fungsi untuk memilih dan memutar video secara manual
 def play_manual_video():
     video_path = entry_manual_video.get()
@@ -111,8 +104,11 @@ def play_manual_video():
         messagebox.showerror("Error", "Harap pilih video terlebih dahulu!")
         return
     
-    label_status.config(text=f"Memutar video: {video_path}")
-    threading.Thread(target=play_video, args=(video_path,), daemon=True).start()
+    screen_choice = screen_var_manual.get()
+    screen_offset_x = 1920 if screen_choice == "Screen 2" else 0  # Atur koordinat layar
+    
+    label_status.config(text=f"Memutar video: {video_path} di {screen_choice}")
+    threading.Thread(target=play_video, args=(video_path, screen_offset_x), daemon=True).start()
 
 # Fungsi untuk memilih video manual
 def choose_manual_video():
@@ -153,7 +149,7 @@ def set_schedule():
 # Fungsi untuk menjalankan penjadwalan
 def start_scheduler():
     threading.Thread(target=run_scheduler, daemon=True).start()
-    label_status.config(text="Penjadwalan telah dimulai!")
+    messagebox.showinfo("Penjadwalan", "Penjadwalan telah dimulai!")
 
 # Fungsi untuk mengecek jadwal setiap menit
 def run_scheduler():
@@ -172,8 +168,10 @@ def run_scheduler():
             schedule_hour, schedule_minute = map(int, schedule_time.split(":"))
 
             if now.hour == schedule_hour and now.minute == schedule_minute:
+                screen_choice = screen_var_schedule.get()
+                screen_offset_x = 1920 if screen_choice == "Screen 2" else 0  # Atur koordinat layar
                 label_status.config(text=f"Memutar video untuk {today_id} pada {schedule_time}...")
-                play_video(video_path)
+                play_video(video_path, screen_offset_x)
 
         time.sleep(30)  # Cek setiap 30 detik
 
@@ -213,10 +211,31 @@ def start_range_playback():
         messagebox.showerror("Error", "Interval harus berupa angka!")
         return
     
+    screen_choice = screen_var_range.get()
+    screen_offset_x = 1920 if screen_choice == "Screen 2" else 0  # Atur koordinat layar
+    
     range_data.append({"video": video_path, "interval": interval_minutes})
     update_range_table()
-    label_status.config(text=f"Memutar video setiap {interval_minutes} menit...")
-    threading.Thread(target=play_video_with_interval, args=(video_path, interval_minutes), daemon=True).start()
+    label_status.config(text=f"Memutar video setiap {interval_minutes} menit di {screen_choice}...")
+    threading.Thread(target=play_video_with_interval, args=(video_path, interval_minutes, screen_offset_x), daemon=True).start()
+
+# Fungsi untuk menghapus jadwal interval
+def delete_interval():
+    selected_item = tree_range.selection()
+    if not selected_item:
+        messagebox.showerror("Error", "Pilih jadwal interval yang ingin dihapus!")
+        return
+
+    for item in selected_item:
+        values = tree_range.item(item, "values")
+        video_path = values[0]  # Ambil path video dari nilai
+        interval = int(values[1])  # Ambil interval dari nilai
+
+        # Hapus entri dari range_data
+        range_data[:] = [data for data in range_data if not (data["video"] == video_path and data["interval"] == interval)]
+
+    update_range_table()  # Perbarui tabel
+    messagebox.showinfo("Sukses", "Jadwal interval berhasil dihapus!")
 
 # GUI Aplikasi
 app = tk.Tk()
@@ -245,12 +264,19 @@ label_range_interval.pack()
 entry_range_interval = tk.Entry(tab_range, width=10)
 entry_range_interval.pack()
 
+# Pilihan layar untuk rentang waktu
+label_range_screen = tk.Label(tab_range, text="Pilih Layar:")
+label_range_screen.pack()
+screen_var_range = tk.StringVar(value="Screen 1")
+screen_menu_range = tk.OptionMenu(tab_range, screen_var_range, "Screen 1", "Screen 2")
+screen_menu_range.pack()
+
 # Tombol mulai rentang waktu
 button_start_range = tk.Button(tab_range, text="Mulai Pemutaran", command=start_range_playback)
 button_start_range.pack(pady=5)
 
 # Tabel data rentang waktu
-columns_range = ("Video", "Interval (menit)")  # Kolom tabel
+columns_range = ("Video", "Interval (menit)")
 tree_range = ttk.Treeview(tab_range, columns=columns_range, show="headings")
 for col in columns_range:
     tree_range.heading(col, text=col)
@@ -273,6 +299,13 @@ entry_manual_video = tk.Entry(tab_manual, width=50)
 entry_manual_video.pack()
 button_choose_manual = tk.Button(tab_manual, text="Pilih Video", command=choose_manual_video)
 button_choose_manual.pack()
+
+# Pilihan layar untuk pemutaran manual
+label_manual_screen = tk.Label(tab_manual, text="Pilih Layar:")
+label_manual_screen.pack()
+screen_var_manual = tk.StringVar(value="Screen 1")
+screen_menu_manual = tk.OptionMenu(tab_manual, screen_var_manual, "Screen 1", "Screen 2")
+screen_menu_manual.pack()
 
 button_play_manual = tk.Button(tab_manual, text="Putar Video Manual", command=play_manual_video)
 button_play_manual.pack()
@@ -307,6 +340,13 @@ label_time.pack()
 entry_time = tk.Entry(tab_schedule, width=10)
 entry_time.pack()
 
+# Pilihan layar untuk penjadwalan
+label_schedule_screen = tk.Label(tab_schedule, text="Pilih Layar:")
+label_schedule_screen.pack()
+screen_var_schedule = tk.StringVar(value="Screen 1")
+screen_menu_schedule = tk.OptionMenu(tab_schedule, screen_var_schedule, "Screen 1", "Screen 2")
+screen_menu_schedule.pack()
+
 # Tombol simpan jadwal
 button_save = tk.Button(tab_schedule, text="Tambahkan Jadwal", command=set_schedule)
 button_save.pack(pady=5)
@@ -334,7 +374,7 @@ label_status.pack(pady=5)
 # Load jadwal saat aplikasi dijalankan
 load_schedule()
 
-# Jalankan penjadwalan saat aplikasi dibuka
+# Jalankan penjadwalan secara otomatis saat aplikasi dibuka
 start_scheduler()
 
 # Jalankan aplikasi
