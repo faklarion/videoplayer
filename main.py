@@ -51,8 +51,14 @@ class VideoPlayerApp:
         self.auto_play_schedule_list = []  # Separate list for auto play
         self.schedule_list = []  # Separate list for scheduled play
 
+
+        self.auto_play_schedule_list = []  # List untuk menyimpan jadwal Auto Play
+        
         # Load existing schedules from JSON and reschedule them
         self.load_schedules()
+
+        # Load auto play configuration from JSON
+        self.load_auto_play_config()
 
         # Get monitor list
         self.monitors = get_monitors()
@@ -60,9 +66,19 @@ class VideoPlayerApp:
 
     def play_next_auto_play_video(self):
         """Play the next video in auto play mode"""
-        if self.auto_play_active:
+        if self.auto_play_active and self.auto_play_schedule_list:
+            auto_play_info = self.auto_play_schedule_list[0]  # Ambil informasi Auto Play pertama
+            video_path = auto_play_info["video_path"]
+            monitor_index = auto_play_info["monitor_index"]
+            volume = auto_play_info["volume"]
+
             # Play the video
-            self.start_vlc_player(self.monitor_dropdown_auto.current(), self.volume_var_auto.get())
+            self.start_vlc_player(monitor_index, volume)
+
+            # Update waktu play berikutnya (tidak perlu di sini, karena interval dihitung setelah video selesai)
+            # next_play_time = datetime.now() + timedelta(minutes=self.interval_var.get())
+            # auto_play_info["next_play_time"] = next_play_time.strftime("%H:%M:%S")
+            # self.update_auto_play_schedule_table()
 
             # Start monitoring the video status
             self.master.after(1000, self.check_video_status)
@@ -123,12 +139,24 @@ class VideoPlayerApp:
         self.stop_timer_button = tk.Button(self.tab_auto_play, text="Stop Timer", command=self.stop_auto_play, state=tk.DISABLED)
         self.stop_timer_button.pack(pady=5)
 
+        # Tombol "Putar" untuk memutar video berdasarkan konfigurasi yang tersimpan
+        self.play_saved_button = tk.Button(self.tab_auto_play, text="Putar", command=self.play_saved_auto_play, state=tk.NORMAL)
+        self.play_saved_button.pack(pady=5)
+
         # Table for auto play schedules
-        self.auto_play_tree = ttk.Treeview(self.tab_auto_play, columns=("No", "Time"), show="headings")
+        self.auto_play_tree = ttk.Treeview(self.tab_auto_play, columns=("No", "Video Path", "Monitor", "Volume", "Interval", "Next Play Time"), show="headings")
         self.auto_play_tree.heading("No", text="No")
-        self.auto_play_tree.heading("Time", text="Scheduled Time")
+        self.auto_play_tree.heading("Video Path", text="Video Path")
+        self.auto_play_tree.heading("Monitor", text="Monitor")
+        self.auto_play_tree.heading("Volume", text="Volume")
+        self.auto_play_tree.heading("Interval", text="Interval (min)")
+        self.auto_play_tree.heading("Next Play Time", text="Next Play Time")
         self.auto_play_tree.column("No", width=50)
-        self.auto_play_tree.column("Time", width=200)
+        self.auto_play_tree.column("Video Path", width=300)
+        self.auto_play_tree.column("Monitor", width=100)
+        self.auto_play_tree.column("Volume", width=100)
+        self.auto_play_tree.column("Interval", width=100)
+        self.auto_play_tree.column("Next Play Time", width=150)
         self.auto_play_tree.pack(pady=10)
 
         # Add buttons for CRUD operations in auto play
@@ -139,6 +167,23 @@ class VideoPlayerApp:
         self.auto_play_delete_button.pack(pady=5)
 
         self.auto_play_tree.bind("<<TreeviewSelect>>", self.on_auto_play_tree_select)
+
+        # Load auto play configuration from JSON
+        self.load_auto_play_config()
+
+    def play_saved_auto_play(self):
+        """Play video based on saved auto play configuration"""
+        if self.auto_play_schedule_list:
+            auto_play_info = self.auto_play_schedule_list[0]  # Ambil konfigurasi pertama
+            self.auto_play_video_path = auto_play_info["video_path"]
+            self.monitor_var_auto.set(f"Monitor {auto_play_info['monitor_index'] + 1}")
+            self.volume_var_auto.set(auto_play_info["volume"])
+            self.interval_var.set(auto_play_info["interval"])
+
+            # Mulai Auto Play
+            self.start_auto_play()
+        else:
+            messagebox.showinfo("Info", "Tidak ada konfigurasi Auto Play yang tersimpan.")
 
     def setup_schedule_tab(self):
         """Setup UI for the scheduled video tab"""
@@ -176,13 +221,17 @@ class VideoPlayerApp:
         self.schedule_button.pack(pady=10)
 
         # Table for scheduled video plays
-        self.schedule_tree = ttk.Treeview(self.tab_schedule, columns=("No", "Time", "Video Path"), show="headings")
+        self.schedule_tree = ttk.Treeview(self.tab_schedule, columns=("No", "Time", "Video Path", "Monitor", "Volume"), show="headings")
         self.schedule_tree.heading("No", text="No")
         self.schedule_tree.heading("Time", text="Scheduled Time")
         self.schedule_tree.heading("Video Path", text="Video Path")
+        self.schedule_tree.heading("Monitor", text="Monitor")
+        self.schedule_tree.heading("Volume", text="Volume")
         self.schedule_tree.column("No", width=50)
         self.schedule_tree.column("Time", width=200)
         self.schedule_tree.column("Video Path", width=300)
+        self.schedule_tree.column("Monitor", width=100)
+        self.schedule_tree.column("Volume", width=100)
         self.schedule_tree.pack(pady=10)
 
         # Add buttons for CRUD operations in scheduled video
@@ -285,11 +334,13 @@ class VideoPlayerApp:
                 window.moveTo(monitor.x, monitor.y)
                 window.maximize()
 
-                # Set the VLC player to fullscreen
-                self.player.set_fullscreen(True)
+               
 
         # Set the volume
         self.player.audio_set_volume(volume)
+
+         # Set the VLC player to fullscreen
+        self.player.set_fullscreen(True)
 
         # Check the video status periodically
         self.check_video_status()
@@ -303,11 +354,11 @@ class VideoPlayerApp:
             self.player = None
             print("Video finished, closing player.")
 
-            # Jika dalam mode Auto Play, jadwalkan pemutaran berikutnya
-            if self.is_auto_play:
+            # Jika dalam mode Auto Play, jadwalkan pemutaran berikutnya setelah interval
+            if self.is_auto_play and self.auto_play_schedule_list:
                 interval_millis = self.interval_var.get() * 60 * 1000  # Convert minutes to milliseconds
                 next_play_time = datetime.now() + timedelta(milliseconds=interval_millis)
-                self.auto_play_schedule_list.append(next_play_time.strftime("%H:%M:%S"))
+                self.auto_play_schedule_list[0]["next_play_time"] = next_play_time.strftime("%H:%M:%S")  # Update waktu play berikutnya
                 self.update_auto_play_schedule_table()
 
                 print(f"Next video will play at {next_play_time.strftime('%H:%M:%S')}")
@@ -326,6 +377,18 @@ class VideoPlayerApp:
         if self.player:
             self.player.audio_set_volume(volume)
 
+    def save_auto_play_config(self):
+        """Save auto play configuration to a JSON file"""
+        with open("auto_play_config.json", "w") as f:
+            json.dump(self.auto_play_schedule_list, f)
+
+    def load_auto_play_config(self):
+        """Load auto play configuration from a JSON file"""
+        if os.path.exists("auto_play_config.json"):
+            with open("auto_play_config.json", "r") as f:
+                self.auto_play_schedule_list = json.load(f)
+                self.update_auto_play_schedule_table()
+
     def start_auto_play(self):
         """Start automatic video playback with a specific time interval"""
         # Hentikan timer sebelumnya jika ada
@@ -343,6 +406,19 @@ class VideoPlayerApp:
         # Clear the schedule list and table
         self.auto_play_schedule_list.clear()
         self.update_auto_play_schedule_table()
+
+        # Simpan informasi Auto Play
+        auto_play_info = {
+            "video_path": self.auto_play_video_path,
+            "monitor_index": self.monitor_dropdown_auto.current(),
+            "volume": self.volume_var_auto.get(),
+            "interval": self.interval_var.get(),
+            "next_play_time": "N/A"  # Waktu play berikutnya akan diupdate setelah video selesai
+        }
+        self.auto_play_schedule_list.append(auto_play_info)
+
+        # Simpan konfigurasi Auto Play ke JSON
+        self.save_auto_play_config()
 
         # Start the first video immediately
         self.play_next_auto_play_video()
@@ -383,13 +459,23 @@ class VideoPlayerApp:
         for item in self.auto_play_tree.get_children():
             self.auto_play_tree.delete(item)
 
-        for i, time_str in enumerate(self.auto_play_schedule_list, start=1):
-            self.auto_play_tree.insert("", "end", values=(i, time_str))
+        for i, auto_play_info in enumerate(self.auto_play_schedule_list, start=1):
+            monitor_name = f"Monitor {auto_play_info['monitor_index'] + 1}"
+            self.auto_play_tree.insert("", "end", values=(
+                i,
+                auto_play_info["video_path"],
+                monitor_name,
+                auto_play_info["volume"],
+                auto_play_info["interval"],
+                auto_play_info.get("next_play_time", "N/A")  # Tampilkan waktu play berikutnya
+            ))
 
     def schedule_video(self):
-        """Schedule video playback based on the selected day and time"""
+        """Schedule video playback based on the selected day, time, monitor, and volume"""
         selected_day = self.day_var.get()
         selected_time = self.time_var.get()
+        selected_monitor_index = self.monitor_dropdown_schedule.current()  # Ambil index monitor yang dipilih
+        selected_volume = self.volume_var_schedule.get()  # Ambil volume yang dipilih
 
         if selected_day and selected_time and hasattr(self, "schedule_video_path"):
             try:
@@ -408,7 +494,9 @@ class VideoPlayerApp:
                     # Simpan jadwal dengan format khusus untuk "Setiap Hari"
                     schedule_entry = {
                         "day_time": "Setiap Hari, " + scheduled_datetime.strftime("%H:%M"),
-                        "video_path": self.schedule_video_path
+                        "video_path": self.schedule_video_path,
+                        "monitor_index": selected_monitor_index,  # Simpan index monitor
+                        "volume": selected_volume  # Simpan volume
                     }
                     self.schedule_list.append(schedule_entry)
                     self.update_schedule_table()
@@ -418,7 +506,7 @@ class VideoPlayerApp:
 
                     # Jadwalkan pemutaran video
                     delay = (scheduled_datetime - now).total_seconds() * 1000
-                    self.master.after(int(delay), lambda: self.play_scheduled_video(self.schedule_video_path))
+                    self.master.after(int(delay), lambda: self.play_scheduled_video(self.schedule_video_path, selected_monitor_index, selected_volume))
 
                 else:
                     # Jika hari tertentu dipilih, gunakan logika sebelumnya
@@ -431,7 +519,9 @@ class VideoPlayerApp:
                     # Simpan jadwal dengan format hari dan waktu
                     schedule_entry = {
                         "day_time": scheduled_datetime.strftime("%A, %H:%M"),
-                        "video_path": self.schedule_video_path
+                        "video_path": self.schedule_video_path,
+                        "monitor_index": selected_monitor_index,  # Simpan index monitor
+                        "volume": selected_volume  # Simpan volume
                     }
                     self.schedule_list.append(schedule_entry)
                     self.update_schedule_table()
@@ -441,7 +531,7 @@ class VideoPlayerApp:
 
                     # Jadwalkan pemutaran video
                     delay = (scheduled_datetime - now).total_seconds() * 1000
-                    self.master.after(int(delay), lambda: self.play_scheduled_video(self.schedule_video_path))
+                    self.master.after(int(delay), lambda: self.play_scheduled_video(self.schedule_video_path, selected_monitor_index, selected_volume))
 
             except ValueError:
                 print("Invalid time format. Use HH:MM.")
@@ -465,6 +555,9 @@ class VideoPlayerApp:
                 for schedule_entry in self.schedule_list:
                     try:
                         day_time = schedule_entry["day_time"]
+                        monitor_index = schedule_entry.get("monitor_index", 0)  # Ambil index monitor, default ke 0 jika tidak ada
+                        volume = schedule_entry.get("volume", 50)  # Ambil volume, default ke 50 jika tidak ada
+
                         if day_time.startswith("Setiap Hari"):
                             # Handle "Setiap Hari" schedule
                             scheduled_time = datetime.strptime(day_time.split(", ")[1], "%H:%M").time()
@@ -475,7 +568,7 @@ class VideoPlayerApp:
                                 scheduled_datetime += timedelta(days=1)
 
                             delay = (scheduled_datetime - now).total_seconds() * 1000
-                            self.master.after(int(delay), lambda video_path=schedule_entry["video_path"]: self.play_scheduled_video(video_path))
+                            self.master.after(int(delay), lambda video_path=schedule_entry["video_path"], monitor_index=monitor_index, volume=volume: self.play_scheduled_video(video_path, monitor_index, volume))
                         else:
                             # Handle specific day schedule
                             scheduled_day, scheduled_time = day_time.split(", ")
@@ -487,16 +580,16 @@ class VideoPlayerApp:
                                 scheduled_datetime += timedelta(weeks=1)
 
                             delay = (scheduled_datetime - now).total_seconds() * 1000
-                            self.master.after(int(delay), lambda video_path=schedule_entry["video_path"]: self.play_scheduled_video(video_path))
+                            self.master.after(int(delay), lambda video_path=schedule_entry["video_path"], monitor_index=monitor_index, volume=volume: self.play_scheduled_video(video_path, monitor_index, volume))
 
                     except ValueError:
                         print(f"Invalid schedule format: {schedule_entry}")
 
-    def play_scheduled_video(self, video_path):
-        """Play a scheduled video"""
+    def play_scheduled_video(self, video_path, monitor_index, volume):
+        """Play a scheduled video on the specified monitor with the specified volume"""
         if os.path.isfile(video_path):
             self.schedule_video_path = video_path  # Set the video path
-            self.start_vlc_player(self.monitor_dropdown_schedule.current(), self.volume_var_schedule.get())
+            self.start_vlc_player(monitor_index, volume)  # Gunakan monitor dan volume yang disimpan
         else:
             messagebox.showerror("Error", f"Video file not found: {video_path}")
 
@@ -506,7 +599,9 @@ class VideoPlayerApp:
             self.schedule_tree.delete(item)
 
         for i, schedule_entry in enumerate(self.schedule_list, start=1):
-            self.schedule_tree.insert("", "end", values=(i, schedule_entry["day_time"], schedule_entry["video_path"]))
+            monitor_name = f"Monitor {schedule_entry.get('monitor_index', 0) + 1}"  # Ambil nama monitor
+            volume = schedule_entry.get("volume", 50)  # Ambil volume, default ke 50 jika tidak ada
+            self.schedule_tree.insert("", "end", values=(i, schedule_entry["day_time"], schedule_entry["video_path"], monitor_name, volume))
 
     def on_auto_play_tree_select(self, event):
         """Handle selection in the auto play schedule table"""

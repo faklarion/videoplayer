@@ -1,4 +1,4 @@
-('C:\\laragon\\www\\videoplayer\\build\\main\\PYZ-00.pyz',
+('C:\\laragon\\www\\vidplayergui\\build\\main\\PYZ-00.pyz',
  [('__future__',
    'C:\\laragon\\bin\\python\\python-3.10\\lib\\__future__.py',
    'PYMODULE'),
