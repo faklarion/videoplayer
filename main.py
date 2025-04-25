@@ -7,6 +7,8 @@ import time
 from datetime import datetime, timedelta
 import json
 import os
+import win32gui
+import win32con
 
 class VideoPlayerApp:
     def __init__(self, master):
@@ -320,7 +322,7 @@ class VideoPlayerApp:
         # Wait for the VLC window to appear
         time.sleep(1)
 
-        # Move to the selected monitor
+        # Move to the selected monitor and set always on top
         if monitor_index < len(self.monitors):
             monitor = self.monitors[monitor_index]
 
@@ -333,13 +335,20 @@ class VideoPlayerApp:
                 window = windows[0]
                 window.moveTo(monitor.x, monitor.y)
                 window.maximize()
-
-               
+                
+                # Set window to be always on top
+                try:
+                    hwnd = win32gui.FindWindow(None, "VLC (Direct3D11 output)")
+                    if hwnd:
+                        win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
+                                            win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+                except Exception as e:
+                    print(f"Error setting window to topmost: {e}")
 
         # Set the volume
         self.player.audio_set_volume(volume)
 
-         # Set the VLC player to fullscreen
+        # Set the VLC player to fullscreen
         self.player.set_fullscreen(True)
 
         # Check the video status periodically
@@ -617,21 +626,43 @@ class VideoPlayerApp:
         """Update the selected auto play schedule"""
         selected_item = self.auto_play_tree.selection()
         if selected_item:
-            index = self.auto_play_tree.index(selected_item[0])
-            # Here you can implement the logic to update the selected schedule
-            # For example, you can ask for new time input and update the list
-            # This is a placeholder for the actual update logic
-            new_time = self.interval_var.get()  # Example: just using the interval as new time
-            self.auto_play_schedule_list[index] = new_time
+            index = self.auto_play_tree.index(selected_item[0])  # Ambil indeks item yang dipilih
+
+            # Ambil data baru dari input pengguna
+            new_video_path = self.auto_play_video_path  # Path video baru
+            new_monitor_index = self.monitor_dropdown_auto.current()  # Monitor baru
+            new_volume = self.volume_var_auto.get()  # Volume baru
+            new_interval = self.interval_var.get()  # Interval baru
+
+            # Perbarui data di daftar
+            self.auto_play_schedule_list[index] = {
+                "video_path": new_video_path,
+                "monitor_index": new_monitor_index,
+                "volume": new_volume,
+                "interval": new_interval,
+                "next_play_time": self.auto_play_schedule_list[index].get("next_play_time", "N/A")  # Pertahankan waktu play berikutnya
+            }
+
+            # Perbarui tabel UI
             self.update_auto_play_schedule_table()
+
+            # Simpan perubahan ke file JSON
+            self.save_auto_play_config()
+
+            messagebox.showinfo("Info", "Jadwal Auto Play berhasil diperbarui.")
 
     def delete_auto_play_schedule(self):
         """Delete the selected auto play schedule"""
         selected_item = self.auto_play_tree.selection()
         if selected_item:
             index = self.auto_play_tree.index(selected_item[0])
-            del self.auto_play_schedule_list[index]
-            self.update_auto_play_schedule_table()
+            del self.auto_play_schedule_list[index]  # Hapus data dari daftar
+            self.update_auto_play_schedule_table()  # Perbarui tabel UI
+
+            # Simpan perubahan ke file JSON
+            self.save_auto_play_config()
+
+            messagebox.showinfo("Info", "Jadwal Auto Play berhasil dihapus.")
 
     def on_schedule_tree_select(self, event):
         """Handle selection in the schedule table"""
